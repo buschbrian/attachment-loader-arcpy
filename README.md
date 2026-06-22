@@ -1,4 +1,4 @@
-# Plat Attachment Loader for ArcGIS Pro
+# Attachment Loader for ArcGIS Pro
 
 Attach local files to ArcGIS feature records by matching normalized filenames to a feature attribute. The original use case is attaching subdivision plat PDFs/TIFFs to polygon features, but the tool also supports other attachment types such as JPG, PNG, DOCX, or ZIP when you configure the extensions.
 
