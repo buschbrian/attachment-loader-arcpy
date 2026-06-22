@@ -1,0 +1,23 @@
+{
+  "merge_with_defaults": true,
+  "drop_words": [
+    "APPROVED",
+    "CORRECTED",
+    "REDUCED",
+    "SCAN"
+  ],
+  "aliases": {
+    "ADD": "ADDN",
+    "ADN": "ADDN",
+    "NO": "NUMBER",
+    "NUM": "NUMBER"
+  },
+  "extensions": [
+    ".pdf",
+    ".tif",
+    ".tiff",
+    ".jpg",
+    ".jpeg",
+    ".png"
+  ]
+}

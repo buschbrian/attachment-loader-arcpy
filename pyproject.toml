@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plat-attachment-loader"
+version = "1.0.0"
+description = "Attach local files to ArcGIS feature records by matching filenames to feature attributes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Brian Busch"}]
+keywords = ["arcgis", "arcpy", "attachments", "gis", "feature-layer", "plats"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Topic :: Scientific/Engineering :: GIS"
+]
+dependencies = []
+
+[project.scripts]
+plat-attachment-loader = "plat_attachment_loader.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
