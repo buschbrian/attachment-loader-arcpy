@@ -1,0 +1,58 @@
+# Copies every branch and tag to the City-custody mirror in Azure DevOps
+# (dev.azure.com/millcreekut/city-code). GitHub stays the working copy; the
+# mirror is the City's record copy, because the City has no GitHub org.
+#
+# Auth: GitHub OIDC -> Entra app `github-city-code-mirror`, whose federated
+# credential trusts only this repository's `mirror` environment. The app has
+# no Azure roles; its only access is Contribute on the `city-code` project.
+#
+# The push is deliberately additive: no --mirror, --force, or --prune.
+# Force push is denied on the Azure side, so a rewritten or deleted GitHub
+# branch fails this job instead of erasing history from the City copy.
+name: Mirror to Azure Repos
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-to-azure-repos
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    environment: mirror
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Push branches and tags to Azure Repos
+        env:
+          TARGET: https://dev.azure.com/millcreekut/city-code/_git/${{ github.event.repository.name }}
+        run: |
+          # 499b84ac-… is the Azure DevOps resource ID; the token lives for
+          # about an hour and is masked in the log.
+          token=$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          git fetch --tags origin '+refs/heads/*:refs/remotes/origin/*'
+          git remote set-head origin --delete || true
+          git -c http.extraheader="AUTHORIZATION: bearer $token" push "$TARGET" \
+            'refs/remotes/origin/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
