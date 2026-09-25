@@ -16,27 +16,29 @@ The safest workflow is:
 - Python 3.10 or newer.
 - No third-party Python packages are required for dry-run, matching, size checks, or tests.
 
-ArcPy is imported only when needed. This means `--size-only` and the unit tests can run in a normal Python environment, but `--attach` and `--overwrite-online` must run in an ArcGIS Pro Python environment.
+ArcPy is imported only when needed. `--size-only` and the unit tests run in a normal Python environment. Everything else, including the dry-run matching report, reads the feature class through ArcPy and must run in ArcGIS Pro's Python environment (for example the ArcGIS Pro Python Command Prompt, `propy.bat`, or the Pro Python window). Hosted overwrite also tries the ArcGIS API for Python (`arcgis`, included with ArcGIS Pro) for an optional, best-effort preflight check.
 
 ## Repository layout
 
 ```text
-plat-attachment-loader/
-  attach_plats_to_feature_layer.py      # backward-compatible runner
+attachment-loader-arcpy/
+  attach_plats_to_feature_layer.py      # runner that works without installing
   pyproject.toml
   README.md
+  CONTRIBUTING.md
+  SECURITY.md
   LICENSE
   examples/
     example_config.json
   src/
     plat_attachment_loader/
-      cli.py
-      config.py
-      matching.py
-      planning.py
-      reports.py
-      arcpy_tools.py
-      publish.py
+      cli.py            # argument parsing, interactive prompts, workflow
+      config.py         # default drop words, aliases, extensions; JSON config
+      matching.py       # filename/key normalization and folder scanning
+      planning.py       # match plan and QA logic
+      reports.py        # CSV and metadata writers
+      arcpy_tools.py    # ArcPy operations (copy, attach, verify)
+      publish.py        # hosted feature layer overwrite
   tests/
     test_matching.py
     test_planning.py
@@ -51,11 +53,18 @@ From a terminal using ArcGIS Pro's Python environment:
 python attach_plats_to_feature_layer.py --help
 ```
 
-You can also run the package module when `src` is on your Python path or after installation:
+You can also install the package into the ArcGIS Pro environment (Esri recommends a cloned environment rather than changing the default `arcgispro-py3`), which adds a `plat-attachment-loader` command:
 
 ```bat
-python -m plat_attachment_loader --help
+python -m pip install -e .
+plat-attachment-loader --help
 ```
+
+`python -m plat_attachment_loader` works too when `src` is on your Python path or the package is installed.
+
+### Interactive mode
+
+Run the script with no arguments to be prompted for each setting instead. If console input is not available, the prompts open as simple dialog boxes instead. Interactive defaults write outputs to your Documents folder.
 
 ## Recommended safe workflow
 
@@ -118,7 +127,7 @@ python attach_plats_to_feature_layer.py ^
   --overwrite-output
 ```
 
-`--output-gdb` is still used in in-place mode because ArcGIS needs a local match table for adding attachments. The tool now creates this geodatabase if it does not exist.
+`--output-gdb` is still used in in-place mode because ArcGIS needs a local match table (`plat_attachment_match`) for adding attachments. The tool creates this geodatabase if it does not exist, and `--overwrite-output` lets it replace an existing match table.
 
 ### 5. Attach and overwrite a hosted feature layer
 
@@ -136,16 +145,18 @@ python attach_plats_to_feature_layer.py ^
   --overwrite-output ^
   --overwrite-online ^
   --service-name "HostedFeatureLayerName" ^
-  --portal-folder "PortalFolderName"
+  --portal-folder "PortalFolderName" ^
+  --aprx "path\to\project.aprx"
 ```
 
-Use these only for intentional exceptions:
+Publishing builds a web layer sharing draft in an ArcGIS Pro project and uploads it with the portal user currently signed in to ArcGIS Pro. Related options:
 
-```bat
---ignore-unmatched-files
---ignore-missing-features
---allow-incomplete-overwrite
-```
+- `--aprx`: project used for the sharing draft. The default, `CURRENT`, only works when the tool runs inside ArcGIS Pro (Python window, notebook, or script tool). From a terminal, pass the path to a `.aprx` file.
+- `--map-name`: map to add the layer to; created if missing. Default: `Attachment Publish`.
+- `--layer-name`: published layer name. Default: the feature class name.
+- `--summary`, `--tags`: item summary and tags on the sharing draft.
+
+See [Hosted overwrite safety gates](#hosted-overwrite-safety-gates) for the checks that must pass first.
 
 ## Matching rules
 
@@ -156,6 +167,8 @@ The tool normalizes both filenames and feature key values by:
 - replacing `&` with `AND`,
 - dropping common noise words such as `PLAT`, `FINAL`, and `SUBDIVISION`,
 - applying aliases such as `ADDITION` to `ADDN`.
+
+The full default word and alias lists are in `src/plat_attachment_loader/config.py`. By default only `.pdf`, `.tif`, and `.tiff` files are scanned.
 
 Example:
 
@@ -181,7 +194,7 @@ python attach_plats_to_feature_layer.py ^
   --config examples\example_config.json
 ```
 
-Example config:
+Example config (`examples/example_config.json`):
 
 ```json
 {
@@ -189,11 +202,15 @@ Example config:
   "drop_words": ["APPROVED", "CORRECTED", "REDUCED", "SCAN"],
   "aliases": {
     "ADD": "ADDN",
-    "ADN": "ADDN"
+    "ADN": "ADDN",
+    "NO": "NUMBER",
+    "NUM": "NUMBER"
   },
   "extensions": [".pdf", ".tif", ".tiff", ".jpg", ".jpeg", ".png"]
 }
 ```
+
+With `merge_with_defaults` set to `true` (the default), these values are added to the built-in lists. Set it to `false` to replace the built-in lists entirely.
 
 Command-line extensions override config extensions:
 
@@ -244,7 +261,7 @@ The missing-feature report has one row per feature that will not receive, or sti
 - `not_planned_for_attachment`
 - `ready_to_attach` after attachment verification, meaning the feature had a valid source file but the expected attachment was not verified.
 
-Reports include run metadata columns and a sidecar metadata file named like:
+On the command line, reports are written to the current folder by default: `attachment_report.csv`, plus `attachment_report_missing_features.csv` unless `--missing-report-csv` is given. Reports include run metadata columns and a sidecar metadata file named like:
 
 ```text
 attachment_report.csv.metadata.json
@@ -290,6 +307,14 @@ Use the full override only when you deliberately want to publish an incomplete r
 ```bat
 --allow-incomplete-overwrite
 ```
+
+## Exit codes
+
+- `0`: finished (or dry run completed).
+- `1`: stopped with an error message, such as a bad path or missing field.
+- `2`: size-only run found files over `--max-mb`.
+- `4`: stopped before attaching because hosted overwrite would be incomplete.
+- `5`: attachments were added locally, but post-attachment verification failed, so hosted overwrite was skipped.
 
 ## Logging
 
