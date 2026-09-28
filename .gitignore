@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tool outputs (see CONTRIBUTING.md: keep generated files out of commits)
+*.gdb/
+*.sd
+*.sddraft
+*.log
+reports/
+logs/
+attachment_report*.csv
+*_missing_features.csv
+features_missing_attachments.csv
+attachment_run_summary.csv
+*.csv.metadata.json
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
