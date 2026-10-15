@@ -1,4 +1,4 @@
-# Copies every branch and tag to the City-custody mirror in Azure DevOps
+# Copies every branch (except Dependabot's) and tag to the City-custody mirror in Azure DevOps
 # (dev.azure.com/millcreekut/city-code). GitHub stays the working copy; the
 # mirror is the City's record copy, because the City has no GitHub org.
 #
@@ -54,5 +54,10 @@ jobs:
           echo "::add-mask::$token"
           git fetch --tags origin '+refs/heads/*:refs/remotes/origin/*'
           git remote set-head origin --delete || true
+          # Dependabot rewrites its branches on every rebase, which this
+          # additive push would reject; their changes reach the City copy
+          # through main once merged.
+          git for-each-ref --format='delete %(refname)' \
+            refs/remotes/origin/dependabot/ | git update-ref --stdin
           git -c http.extraheader="AUTHORIZATION: bearer $token" push "$TARGET" \
             'refs/remotes/origin/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
